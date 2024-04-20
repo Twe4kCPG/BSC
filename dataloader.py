@@ -4,25 +4,29 @@ import numpy as np
 import pandas as pd
 import scipy.io
 
+
 import os
 
 from tqdm import tqdm
 
+shm_dir = '/dev/shm/sschabes/'
+
 class ECGDataset(torch.utils.data.Dataset):
     def __init__(self):
         super().__init__()
-        if not os.path.exists('/dev/shm/BSC_data.pt'):
-            df = pd.read_csv('./data/filtered_output_csv.csv',sep=';')
+        if not os.path.exists(shm_dir+ 'BSC_data.pt'):
+            df = pd.read_csv('./data/output.csv',sep=';')
             df['Text'] = df['Text'].astype(str)
             data = []
             target = []
 
             for i in tqdm(range(len(df))):
                 line = df.iloc[i]
-                tar = 0 if len(line['Text'].strip())==0 else 1
+                text = line['Text'].strip().lower()
+                tar = 0 if "normal" in text  else 1
                 target.append(tar)
                 filename = line['Filename']
-                dat = scipy.io.loadmat('./data/output/' + filename + '_output.mat')['ecg']
+                dat = scipy.io.loadmat('./data/FX_raw/' + filename + '.mat')['x']
                 if dat.shape[1]==5000: 
                     data.append(dat)
 
@@ -33,13 +37,17 @@ class ECGDataset(torch.utils.data.Dataset):
             
             self.target = torch.tensor(np.array(target)).long()
         else:
-            self.data = torch.load('/dev/shm/BSC_data.pt')    
-            self.target = torch.load('/dev/shm/BSC_target.pt')    
+            self.data = torch.load(shm_dir+ 'BSC_data.pt')    
+            self.target = torch.load(shm_dir+ 'BSC_target.pt')    
 
-
-        torch.save(self.data,'/dev/shm/BSC_data.pt')
-        torch.save(self.target,'/dev/shm/BSC_target.pt')
-
+        if not os.path.exists(shm_dir):
+            # Create the shm_dir
+            os.makedirs(shm_dir)
+        torch.save(self.data,shm_dir+ 'BSC_data.pt')
+        torch.save(self.target,shm_dir+ 'BSC_target.pt')
+        
+        self.data = self.data.float()
+        self.target = self.target
 
     def __len__(self):
         return self.data.shape[0]
